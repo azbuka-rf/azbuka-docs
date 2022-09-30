@@ -1,0 +1,110 @@
+#include "WiFi.h"
+#include "AsyncUDP.h"
+
+const char *ssid = "vika";
+const char *password = "korovin228";
+
+IPAddress servIP(192, 168, 43, 203);
+const uint16_t port = 123456;
+
+AsyncUDP udp;
+
+struct cord {
+  int x,y;
+};
+
+int readInt() {
+  int res = 0;
+  bool ok = 0;
+  while(true) {
+    if(Serial.available() > 0) {
+      char c = Serial.peek();
+      if(c >= '0' && c <= '9') {
+        ok = 1;
+        res = res*10 + c-'0';
+        Serial.read();
+      }
+      else if(ok){
+        break;
+      }
+      else {
+        Serial.read();
+      }
+    }
+  }
+  return res;
+}
+
+
+
+void parse(AsyncUDPPacket packet) {
+
+  Serial.write(packet.data(), packet.length());
+  Serial.println();
+  String msg;
+  for(int i = 0; i < packet.length(); ++i) {
+    msg += *(packet.data()+i);
+  }
+  Serial.println(msg);
+}
+
+void sendWiFi(String msg) {
+  udp.broadcastTo(msg, port);
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  WiFi.begin(ssid, password);
+  while(WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("Connecting to WiFi...");
+    delay(100);
+  }
+
+  if(udp.connect(servIP, port)) {
+    Serial.println("UDP connection enabled");
+    udp.onPacket(parse);
+  } else {
+    Serial.println("UDP connection failed");
+    Serial.println("Please Restart");
+    while(1) {
+      delay(1000);
+    }
+  }
+}
+
+void loop() {
+  delay(50);
+  if(WiFi.status() != WL_CONNECTED) {
+    setup();
+  }
+  if(Serial.available()) {
+    char oper = Serial.read();
+
+    if(oper == 'D') {
+      String move;
+      while(Serial.peek() != '\n') {
+        move+=Serial.read();
+      }
+      sendWiFi("M " + move + "\n");
+    } else if(oper == 'M') {
+      cord s; s.x = xSq[readInt()]; s.y = ySq[readInt()];
+      cord e; e.x = xSq[readInt()]; e.y = ySq[readInt()];
+      goTo(s)
+      if(e.x < s.x) {
+        stepX(-17);
+      } else if(s.x < e.x) {
+        stepX(17);
+      }
+      
+      if(s.y < e.y) {
+        goTo({s.x,e.y-17});
+      } else if(e.y < s.y) {
+        goTo({s.x, e.y+17});
+      }
+      
+      goTo({e.x,Y});
+      goTo(e);
+    }
+  }
+}
